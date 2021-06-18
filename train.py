@@ -24,8 +24,54 @@ from data import create_dataset
 from models import create_model
 from util.visualizer import Visualizer
 
+import os
+import cv2
+import torch
+import torch.nn
+from random import randint
+from torch.utils.data.dataset import Dataset
+
+from data.base_dataset import BaseDataset, get_params, get_transform
+
+class My_Data(Dataset):
+    def __init__(self, opt, split):
+        self.root = opt.dataroot
+        self.split = split
+
+        self.files = []
+        for pt, _, files in os.walk(os.path.join(root, 'A', split)):
+            for file in files:
+                self.files.append(file)
+        
+        self.input_nc = self.opt.output_nc if self.opt.direction == 'BtoA' else self.opt.input_nc
+        self.output_nc = self.opt.input_nc if self.opt.direction == 'BtoA' else self.opt.output_nc
+        
+    def __len__(self):
+        return len(self.names)
+
+    def get_bound(self):
+        return 100 + randint(0, 200), 400 + randint(0, 200)
+
+    def __getitem__(self, index):
+        s = self.files[index]
+        A = cv2.imread(os.path.join(self.root, 'A', self.splt, s))
+        B = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        B = cv2.GaussianBlur(B, (3,3), 0)
+        L, R = self.get_bounds()
+        B = cv2.Canny(B, L, R)
+
+        transform_params = get_params(self.opt, A.size)
+        A_transform = get_transform(self.opt, transform_params, grayscale=(self.input_nc == 1))
+        B_transform = get_transform(self.opt, transform_params, grayscale=(self.output_nc == 1))
+
+        return A, B
+
+
+
 if __name__ == '__main__':
     opt = TrainOptions().parse()   # get training options
+    # dataset = My_Data(opt, 'train')
+    # dataset = torch.utils.data.DataLoader(dataset, batchsize=opt.batch_size, shuffle=True, )
     dataset = create_dataset(opt)  # create a dataset given opt.dataset_mode and other options
     dataset_size = len(dataset)    # get the number of images in the dataset.
     print('The number of training images = %d' % dataset_size)

@@ -3,6 +3,9 @@ from data.base_dataset import BaseDataset, get_params, get_transform
 from data.image_folder import make_dataset
 from PIL import Image
 
+import cv2
+import numpy
+from random import randint
 
 class AlignedDataset(BaseDataset):
     """A dataset class for paired image dataset.
@@ -18,11 +21,15 @@ class AlignedDataset(BaseDataset):
             opt (Option class) -- stores all the experiment flags; needs to be a subclass of BaseOptions
         """
         BaseDataset.__init__(self, opt)
+        self.random_canny = opt.random_canny
         self.dir_AB = os.path.join(opt.dataroot, opt.phase)  # get the image directory
         self.AB_paths = sorted(make_dataset(self.dir_AB, opt.max_dataset_size))  # get image paths
         assert(self.opt.load_size >= self.opt.crop_size)   # crop_size should be smaller than the size of loaded image
         self.input_nc = self.opt.output_nc if self.opt.direction == 'BtoA' else self.opt.input_nc
         self.output_nc = self.opt.input_nc if self.opt.direction == 'BtoA' else self.opt.output_nc
+
+    def get_bounds(self):
+        return 150 + randint(0, 250), 400 + randint(0, 200)
 
     def __getitem__(self, index):
         """Return a data point and its metadata information.
@@ -43,7 +50,22 @@ class AlignedDataset(BaseDataset):
         w, h = AB.size
         w2 = int(w / 2)
         A = AB.crop((0, 0, w2, h))
-        B = AB.crop((w2, 0, w, h))
+
+        if self.random_canny:
+            B = cv2.cvtColor(numpy.asarray(A),cv2.COLOR_RGB2BGR)
+            L, R = self.get_bounds()
+            B = cv2.GaussianBlur(B, (3,3), 0)
+            B = 255 - cv2.Canny(B, L, R)
+            B = Image.fromarray(cv2.cvtColor(B, cv2.COLOR_GRAY2RGB))
+        else:
+            B = AB.crop((w2, 0, w, h))
+            # B = cv2.cvtColor(numpy.asarray(B),cv2.COLOR_RGB2BGR)
+            # L, R = self.get_bounds()
+            # B = cv2.GaussianBlur(B, (3,3), 0)
+            # B = 255 - cv2.Canny(B, L, R)
+            # B = Image.fromarray(cv2.cvtColor(B, cv2.COLOR_GRAY2RGB))
+            # B = cv2.cvtColor(numpy.asarray(B),cv2.COLOR_RGB2BGR)
+            # B = Image.fromarray(cv2.cvtColor(B, cv2.COLOR_BGR2RGB))
 
         # apply the same transform to both A and B
         transform_params = get_params(self.opt, A.size)
